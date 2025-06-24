@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Solar Altitude Calculator</title>
+    <meta charset="UTF-8">
+</head>
+<body>
+    <h1>Solar Altitude Calculator</h1>
+
+    <form method="post">
+        <label for="start">Start:</label>
+        <input type="datetime-local" id="start" name="start" value="{{ request.form.get('start', default_start) }}"><br><br>
+
+        <label for="end">End:</label>
+        <input type="datetime-local" id="end" name="end" value="{{ request.form.get('end', default_end) }}"><br><br>
+
+        <label for="interval">Interval (minutes):</label>
+        <input type="number" id="interval" name="interval" value="{{ request.form.get('interval', '10') }}" required><br><br>
+
+        <label for="latitude">Latitude:</label>
+        <input type="number" step="any" id="latitude" name="latitude" value="{{ request.form.get('latitude', '35.6895') }}" required><br><br>
+
+        <label for="longitude">Longitude:</label>
+        <input type="number" step="any" id="longitude" name="longitude" value="{{ request.form.get('longitude', '139.6917') }}" required><br><br>
+
+        <label for="altitude">Altitude (meters):</label>
+        <input type="number" step="any" id="altitude" name="altitude" value="{{ request.form.get('altitude', '0') }}"><br><br>
+
+        <label for="timezone">Timezone offset (e.g., +9, -5):</label>
+        <input type="number" id="timezone" name="timezone" value="{{ request.form.get('timezone', '9') }}" required><br><br>
+
+        <label>Special Times (up to 5 optional):</label><br>
+        {% for i in range(5) %}
+            <input type="text" name="special_times" placeholder="YYYY-MM-DD HH:MM"
+                   value="{{ request.form.getlist('special_times')[i] if request.form.getlist('special_times')|length > i else '' }}"><br>
+        {% endfor %}
+        <br>
+
+        <label>Special Altitudes (up to 5 optional, degrees):</label><br>
+        {% for i in range(5) %}
+            <input type="text" name="special_angles" placeholder="e.g., 45.0"
+                   value="{{ request.form.getlist('special_angles')[i] if request.form.getlist('special_angles')|length > i else '' }}"><br>
+        {% endfor %}
+        <br>
+
+        <label for="angle_threshold">Angle threshold (degrees):</label>
+        <input type="number" step="any" id="angle_threshold" name="angle_threshold"
+               value="{{ request.form.get('angle_threshold', '1.0') }}" required><br><br>
+
+        <label for="xtick_minutes">X-axis tick interval (minutes):</label>
+        <input type="number" id="xtick_minutes" name="xtick_minutes" value="{{ request.form.get('xtick_minutes', 60) }}"><br><br>
+
+        <label for="ytick_degrees">Y-axis tick interval (degrees):</label>
+        <input type="number" id="ytick_degrees" name="ytick_degrees" value="{{ request.form.get('ytick_degrees', 10) }}"><br><br>
+
+        <button type="submit">Calculate</button>
+    </form>
+
+    {% if data is not none %}
+        {% if chart_url %}
+        <h2>Chart</h2>
+        <img id="solar-chart" src="data:image/png;base64,{{ chart_url }}" alt="Solar Altitude Chart">
+        <br><br>
+        <a id="download-btn" href="data:image/png;base64,{{ chart_url }}" download="{{ chart_filename }}">
+        <button type="button">グラフ画像を保存</button>
+        </a>
+        <br><br>
+        {% endif %}
+
+        <h2>Results Table</h2>
+        <form method="post" action="/export">
+            <input type="hidden" name="start" value="{{ request.form['start'] }}">
+            <input type="hidden" name="end" value="{{ request.form['end'] }}">
+            <input type="hidden" name="interval" value="{{ request.form['interval'] }}">
+            <input type="hidden" name="latitude" value="{{ request.form['latitude'] }}">
+            <input type="hidden" name="longitude" value="{{ request.form['longitude'] }}">
+            <input type="hidden" name="altitude" value="{{ request.form['altitude'] }}">
+            <input type="hidden" name="timezone" value="{{ request.form['timezone'] }}">
+            <button type="submit">Export CSV</button>
+        </form>
+
+        <table border="1">
+            <tr><th>Time</th><th>Solar Altitude (deg)</th></tr>
+            {% for row in data.itertuples() %}
+                <tr {% if row.highlight %}style="background-color: #ffff99;"{% endif %}>
+                    <td>{% if row.highlight %}<strong>{{ row.Time }}</strong>{% else %}{{ row.Time }}{% endif %}</td>
+                    <td>{% if row.highlight %}<strong>{{ '%.2f' % row._2 }}</strong>{% else %}{{ '%.2f' % row._2 }}{% endif %}</td>
+                </tr>
+            {% endfor %}
+        </table>
+    {% endif %}
+</body>
+</html>
