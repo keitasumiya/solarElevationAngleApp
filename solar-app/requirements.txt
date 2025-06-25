@@ -3,3 +3,4 @@ pvlib
 matplotlib
 pytz
 pandas
+timezonefinder
