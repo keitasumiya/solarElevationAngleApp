@@ -71,14 +71,14 @@ def index():
             highlight_times.add(data.at[closest_idx, 'Time'])
 
         for angle in special_angles:
-            matching = data[(data['Solar Altitude'] - angle).abs() <= angle_threshold]
+            matching = data[(data['Solar Elevation Angle'] - angle).abs() <= angle_threshold]
             highlight_indices.update(matching.index)
             highlight_times.update(matching['Time'].tolist())
 
         data['highlight'] = data.index.isin(highlight_indices)
 
         fig, ax = plt.subplots(figsize=(10, 8))
-        ax.plot(data['Time'], data['Solar Altitude'], label='Solar Altitude')
+        ax.plot(data['Time'], data['Solar Elevation Angle'], label='Solar Elevation Angle')
         for t in sorted(highlight_times):
             ax.axvline(t, color='red', linestyle='--')
 
@@ -93,15 +93,15 @@ def index():
         ax.xaxis.set_major_formatter(plt.FuncFormatter(format_xtick))
         ax.tick_params(axis='x', labelrotation=90)
 
-        y_min = np.floor(data['Solar Altitude'].min() / ytick_degrees) * ytick_degrees
-        y_max = np.ceil(data['Solar Altitude'].max() / ytick_degrees) * ytick_degrees
+        y_min = np.floor(data['Solar Elevation Angle'].min() / ytick_degrees) * ytick_degrees
+        y_max = np.ceil(data['Solar Elevation Angle'].max() / ytick_degrees) * ytick_degrees
         yticks = np.arange(y_min, y_max + ytick_degrees, ytick_degrees)
         ax.set_yticks(yticks)
 
         ax.grid(True)
         ax.set_xlabel('Time')
-        ax.set_ylabel('Solar Altitude (deg)')
-        ax.set_title(f'Solar Altitude: {start.strftime("%Y-%m-%d %H:%M")} to {end.strftime("%Y-%m-%d %H:%M")}')
+        ax.set_ylabel('Solar Elevation Angle (deg)')
+        ax.set_title(f'Solar Elevation Angle: {start.strftime("%Y-%m-%d %H:%M")} to {end.strftime("%Y-%m-%d %H:%M")}')
         ax.legend()
         plt.tight_layout()
 
@@ -184,7 +184,7 @@ def getSolarElevationAngleData(start, end, interval, latitude, longitude, altitu
         solar_elevations.append(solar_elevation)
     data = pd.DataFrame({
         'Time': datetimes,
-        'Solar Altitude': solar_elevations
+        'Solar Elevation Angle': solar_elevations
     })
     return data
 
