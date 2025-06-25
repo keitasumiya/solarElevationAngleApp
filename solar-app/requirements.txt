@@ -1,6 +1,7 @@
-flask
+Flask
 pvlib
 matplotlib
 pytz
 pandas
 timezonefinder
+gunicorn
