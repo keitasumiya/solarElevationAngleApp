@@ -48,10 +48,11 @@ def index():
         xtick_minutes = int(request.form.get('xtick_minutes', xtick_minutes))
         ytick_degrees = int(request.form.get('ytick_degrees', ytick_degrees))
         timezone = tf.timezone_at(lng=lon, lat=lat) or default_tz
+        tzinfo = pytz.timezone(timezone)
         data = getSolarElevationAngleData(start, end, interval, lat, lon, altitude, timezone)
 
         special_times = [
-            timezone.localize(pd.to_datetime(t.strip()))
+            tzinfo.localize(pd.to_datetime(t.strip()))
             for t in special_times_raw_list
             if t.strip()
         ]
