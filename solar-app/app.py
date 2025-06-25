@@ -1,6 +1,6 @@
 import pandas as pd
 import pvlib
-from flask import Flask, request, render_template, send_file
+from flask import Flask, request, render_template, send_file, jsonify, send_from_directory
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from io import BytesIO
@@ -8,27 +8,28 @@ import base64
 import pytz
 import numpy as np
 from datetime import datetime, timedelta
-import os
+from timezonefinder import TimezoneFinder
 
 app = Flask(__name__)
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
+    global data
     data = None
     chart_url = None
     chart_filename = ""
     special_times = []
     special_angles = []
-    lat = 35.6895
-    lon = 139.6917
-    altitude = 0
-    tz_offset = 9  # Default +9 for Asia/Tokyo
+    lat = default_latitude
+    lon = default_longitude
+    altitude = default_altitude
     angle_threshold = 1.0
     xtick_minutes = 60
     ytick_degrees = 10
 
-    timezone = pytz.FixedOffset(tz_offset * 60)
-    now = datetime.now(timezone)
+    timezone = tf.timezone_at(lng=lon, lat=lat) or default_tz
+    tzinfo = pytz.timezone(timezone)
+    now = datetime.now(tzinfo)
     default_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     default_end = default_start + timedelta(days=1)
 
@@ -42,18 +43,11 @@ def index():
         lat = float(request.form.get('latitude', lat))
         lon = float(request.form.get('longitude', lon))
         altitude = float(request.form.get('altitude', altitude))
-        tz_offset = int(request.form.get('timezone', tz_offset))
         angle_threshold = float(request.form.get('angle_threshold', angle_threshold))
         xtick_minutes = int(request.form.get('xtick_minutes', xtick_minutes))
         ytick_degrees = int(request.form.get('ytick_degrees', ytick_degrees))
-        timezone = pytz.FixedOffset(tz_offset * 60)
-
-        times = pd.date_range(start=start, end=end, freq=f'{interval}min', tz=timezone)
-        solpos = pvlib.solarposition.get_solarposition(times, lat, lon, altitude=altitude)
-        data = pd.DataFrame({
-            'Time': times,
-            'Solar Altitude': solpos['apparent_elevation']
-        })
+        timezone = tf.timezone_at(lng=lon, lat=lat) or default_tz
+        data = getSolarElevationAngleData(start, end, interval, lat, lon, altitude, timezone)
 
         special_times = [
             timezone.localize(pd.to_datetime(t.strip()))
@@ -82,7 +76,7 @@ def index():
 
         data['highlight'] = data.index.isin(highlight_indices)
 
-        fig, ax = plt.subplots(figsize=(10, 4))
+        fig, ax = plt.subplots(figsize=(10, 8))
         ax.plot(data['Time'], data['Solar Altitude'], label='Solar Altitude')
         for t in sorted(highlight_times):
             ax.axvline(t, color='red', linestyle='--')
@@ -124,7 +118,8 @@ def index():
             angle_threshold=angle_threshold,
             xtick_minutes=xtick_minutes, ytick_degrees=ytick_degrees,
             default_start=start.strftime('%Y-%m-%d %H:%M'),
-            default_end=end.strftime('%Y-%m-%d %H:%M')
+            default_end=end.strftime('%Y-%m-%d %H:%M'),
+            timezone=timezone
         )
 
     return render_template(
@@ -133,26 +128,20 @@ def index():
         angle_threshold=angle_threshold,
         xtick_minutes=xtick_minutes, ytick_degrees=ytick_degrees,
         default_start=default_start.strftime('%Y-%m-%d %H:%M'),
-        default_end=default_end.strftime('%Y-%m-%d %H:%M')
+        default_end=default_end.strftime('%Y-%m-%d %H:%M'),
+        timezone=timezone
     )
 
 @app.route('/export', methods=['POST'])
 def export_csv():
+    global data
     start = pd.to_datetime(request.form['start'])
     end = pd.to_datetime(request.form['end'])
     interval = int(request.form['interval'])
-    lat = float(request.form.get('latitude', 35.6895))
-    lon = float(request.form.get('longitude', 139.6917))
-    altitude = float(request.form.get('altitude', 0))
-    tz_offset = int(request.form.get('timezone', 9))
-    timezone = pytz.FixedOffset(tz_offset * 60)
-
-    times = pd.date_range(start=start, end=end, freq=f'{interval}min', tz=timezone)
-    solpos = pvlib.solarposition.get_solarposition(times, lat, lon, altitude=altitude)
-    df = pd.DataFrame({
-        'Time': times,
-        'Solar Altitude': solpos['apparent_elevation']
-    })
+    lat = float(request.form.get('latitude', default_latitude))
+    lon = float(request.form.get('longitude', default_longitude))
+    altitude = float(request.form.get('altitude', default_altitude))
+    df = data
 
     filename = f"{start.strftime('%Y-%m-%d_%H%M')}_{end.strftime('%Y-%m-%d_%H%M')}_{interval}min_{lat}_{lon}_{altitude}_table.csv"
 
@@ -166,6 +155,44 @@ def export_csv():
         mimetype='text/csv'
     )
 
+@app.route("/get_timezone")
+def get_timezone():
+    lat = request.args.get("lat", type=float)
+    lon = request.args.get("lon", type=float)
+    tz = tf.timezone_at(lat=lat, lng=lon)
+    return jsonify({"timezone": tz})
+
+@app.route('/static/<path:filename>')
+def static_files(filename):
+    return send_from_directory('static', filename)
+
+def calculate_solar_solar_elevation(local_dt, latitude, longitude, altitude, timezone):
+    local_dt_str = local_dt.strftime('%Y-%m-%d %H:%M:%S')
+    time = pd.Timestamp(local_dt_str, tz=timezone)
+    location = pvlib.location.Location(latitude, longitude, timezone, altitude)
+    solar_position = location.get_solarposition(time, method='nrel_numpy')
+    solar_elevation = solar_position['elevation'].values[0]
+    return solar_elevation
+
+def getSolarElevationAngleData(start, end, interval, latitude, longitude, altitude, timezone):
+    datetimes = pd.date_range(start=start, end=end, freq=f'{interval}min', tz=timezone)
+    solar_elevations = []
+    for dt in datetimes:
+        local_time = dt
+        solar_elevation = calculate_solar_solar_elevation(local_time, latitude, longitude, altitude, timezone)
+        solar_elevations.append(solar_elevation)
+    data = pd.DataFrame({
+        'Time': datetimes,
+        'Solar Altitude': solar_elevations
+    })
+    return data
+
+tf = TimezoneFinder()
+all_timezones = pytz.all_timezones
+default_tz = "Asia/Tokyo"
+default_latitude = 35.613288497743945
+default_longitude = 139.54987863680572
+default_altitude = 58.6
+data = None
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=5000)
