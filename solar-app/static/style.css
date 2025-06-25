@@ -126,6 +126,10 @@ img {
     margin: auto;
 }
 
+.no-text-decoration {
+    text-decoration: none;
+}
+
 /* モバイル対応 */
 @media (max-width: 600px) {
     .form-group {

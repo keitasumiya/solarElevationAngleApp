@@ -93,10 +93,8 @@
         {% if chart_url %}
         <h2>Chart</h2>
         <img id="solar-chart" src="data:image/png;base64,{{ chart_url }}" alt="Solar Altitude Chart">
-        <a id="download-btn" href="data:image/png;base64,{{ chart_url }}" download="{{ chart_filename }}">
-            <div class="form-group">
-                <button type="button" class="form-group-center">Export Chart Image</button>
-            </div>
+        <a id="download-btn" href="data:image/png;base64,{{ chart_url }}" download="{{ chart_filename }}" class="form-group no-text-decoration">
+            <button type="button" class="form-group-center">Export Chart Image</button>
         </a>
         {% endif %}
 
